@@ -99,7 +99,7 @@ func (pdb *PointerDB) Get(ctx context.Context, path storj.Path) (pointer *pb.Poi
 	}
 
 	if res.GetPointer().GetType() == pb.Pointer_INLINE {
-		return res.GetPointer(), nodes, res.GetPba(), nil
+		return res.GetPointer(), nodes, nil, nil
 	}
 
 	pieces := res.GetPointer().GetRemote().GetRemotePieces()
