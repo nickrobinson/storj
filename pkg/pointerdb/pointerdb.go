@@ -142,45 +142,36 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (resp *pb.GetRespo
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	pba, err := s.PayerBandwidthAllocation(ctx, &pb.PayerBandwidthAllocationRequest{Action: pb.BandwidthAction_GET})
-	if err != nil {
-		s.logger.Error("err getting payer bandwidth allocation", zap.Error(err))
-		return nil, status.Errorf(codes.Internal, err.Error())
+	if !s.config.Overlay || pointer.Remote == nil {
+		return &pb.GetResponse{Pointer: pointer, Nodes: nil, Pba: nil}, nil
 	}
 
 	nodes := []*pb.Node{}
-
-	var r = &pb.GetResponse{
-		Pointer: pointer,
-		Nodes:   nil,
-		Pba:     pba.GetPba(),
-	}
-
-	if !s.config.Overlay || pointer.Remote == nil {
-		return r, nil
-	}
-
 	for _, piece := range pointer.Remote.RemotePieces {
 		node, err := s.cache.Get(ctx, piece.NodeId)
 		if err != nil {
 			s.logger.Error("Error getting node from cache", zap.String("ID", piece.NodeId.String()), zap.Error(err))
 			continue
 		}
+		if node != nil {
+			node.Type.DPanicOnInvalid("pdb server Get")
+		}
 		nodes = append(nodes, node)
 	}
-
-	for _, v := range nodes {
-		if v != nil {
-			v.Type.DPanicOnInvalid("pdb server Get")
+	nodeIds := []storj.NodeID{}
+	for _, n := range nodes {
+		if n != nil {
+			nodeIds = append(nodeIds, n.Id)
 		}
 	}
-	r = &pb.GetResponse{
-		Pointer: pointer,
-		Nodes:   nodes,
-		Pba:     pba.GetPba(),
+	pbaReq := &pb.PayerBandwidthAllocationRequest{Action: pb.BandwidthAction_GET, StorageNodeIds: nodeIds}
+	pba, err := s.PayerBandwidthAllocation(ctx, pbaReq)
+	if err != nil {
+		s.logger.Error("err getting payer bandwidth allocation", zap.Error(err))
+		return nil, status.Errorf(codes.Internal, err.Error())
 	}
 
-	return r, nil
+	return &pb.GetResponse{Pointer: pointer, Nodes: nodes, Pba: pba.GetPba()}, nil
 }
 
 // List returns all Path keys in the Pointers bucket
@@ -249,7 +240,7 @@ func (s *Server) PayerBandwidthAllocation(ctx context.Context, req *pb.PayerBand
 		return nil, err
 	}
 
-	pba, err := s.allocation.PayerBandwidthAllocation(ctx, pi, req.GetAction())
+	pba, err := s.allocation.PayerBandwidthAllocation(ctx, pi, req.GetAction(), req.StorageNodeIds)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, err.Error())
 	}
