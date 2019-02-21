@@ -147,6 +147,7 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (resp *pb.GetRespo
 	}
 
 	nodes := []*pb.Node{}
+	nodeIds := []storj.NodeID{}
 	for _, piece := range pointer.Remote.RemotePieces {
 		node, err := s.cache.Get(ctx, piece.NodeId)
 		if err != nil {
@@ -155,14 +156,9 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (resp *pb.GetRespo
 		}
 		if node != nil {
 			node.Type.DPanicOnInvalid("pdb server Get")
+			nodeIds = append(nodeIds, node.Id)
 		}
 		nodes = append(nodes, node)
-	}
-	nodeIds := []storj.NodeID{}
-	for _, n := range nodes {
-		if n != nil {
-			nodeIds = append(nodeIds, n.Id)
-		}
 	}
 	pbaReq := &pb.PayerBandwidthAllocationRequest{Action: pb.BandwidthAction_GET, StorageNodeIds: nodeIds}
 	pba, err := s.PayerBandwidthAllocation(ctx, pbaReq)
