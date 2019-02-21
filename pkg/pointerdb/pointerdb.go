@@ -143,6 +143,13 @@ func (s *Server) Get(ctx context.Context, req *pb.GetRequest) (resp *pb.GetRespo
 	}
 
 	if !s.config.Overlay || pointer.Remote == nil {
+		// pbaReq := &pb.PayerBandwidthAllocationRequest{Action: pb.BandwidthAction_GET, StorageNodeIds: []storj.NodeID{}}
+		// pba, err := s.PayerBandwidthAllocation(ctx, pbaReq)
+		// if err != nil {
+		// 	s.logger.Error("err getting payer bandwidth allocation", zap.Error(err))
+		// 	return nil, status.Errorf(codes.Internal, err.Error())
+		// }
+		// return &pb.GetResponse{Pointer: pointer, Nodes: nil, Pba: pba.GetPba()}, nil
 		return &pb.GetResponse{Pointer: pointer, Nodes: nil, Pba: nil}, nil
 	}
 
