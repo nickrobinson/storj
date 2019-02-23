@@ -82,6 +82,10 @@ func (checker *Checker) Close() error {
 func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error) {
 	defer mon.Task()(&ctx)(&err)
 
+	var remoteSegmentsChecked int64
+	var remoteSegmentsNeedingRepair int64
+	var remoteSegmentsLost int64
+
 	err = checker.pointerdb.Iterate("", "", true, false,
 		func(it storage.Iterator) error {
 			var item storage.ListItem
@@ -122,8 +126,10 @@ func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error)
 
 				missingPieces := combineOfflineWithInvalid(offlineNodes, invalidNodes)
 
+				remoteSegmentsChecked++
 				numHealthy := len(nodeIDs) - len(missingPieces)
 				if (int32(numHealthy) >= pointer.Remote.Redundancy.MinReq) && (int32(numHealthy) < pointer.Remote.Redundancy.RepairThreshold) {
+					remoteSegmentsNeedingRepair++
 					err = checker.repairQueue.Enqueue(ctx, &pb.InjuredSegment{
 						Path:       string(item.Key),
 						LostPieces: missingPieces,
@@ -132,6 +138,7 @@ func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error)
 						return Error.New("error adding injured segment to queue %s", err)
 					}
 				} else if int32(numHealthy) < pointer.Remote.Redundancy.MinReq {
+					remoteSegmentsLost++
 					// make an entry in to the irreparable table
 					segmentInfo := &irreparable.RemoteSegmentInfo{
 						EncryptedSegmentPath:   item.Key,
@@ -151,7 +158,13 @@ func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error)
 			return nil
 		},
 	)
-	return err
+	if err != nil {
+		return err
+	}
+	mon.IntVal("remote_segments_checked").Observe(remoteSegmentsChecked)
+	mon.IntVal("remote_segments_needing_repair").Observe(remoteSegmentsNeedingRepair)
+	mon.IntVal("remote_segments_lost").Observe(remoteSegmentsLost)
+	return nil
 }
 
 // OfflineNodes returns the indices of offline nodes
