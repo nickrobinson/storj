@@ -5,7 +5,6 @@ package checker
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
@@ -25,9 +24,8 @@ import (
 
 // Error is a standard error class for this package.
 var (
-	Error           = errs.Class("checker error")
-	mon             = monkit.Package()
-	totalFilesCount int64
+	Error = errs.Class("checker error")
+	mon   = monkit.Package()
 )
 
 // Config contains configurable values for checker
@@ -84,19 +82,11 @@ func (checker *Checker) Close() error {
 func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error) {
 	defer mon.Task()(&ctx)(&err)
 
-	var fileCountInProgress int64
-	mon.IntVal("totalFilesCount").Observe(totalFilesCount)
 	err = checker.pointerdb.Iterate("", "", true, false,
 		func(it storage.Iterator) error {
 			var item storage.ListItem
 			for it.Next(&item) {
 				pointer := &pb.Pointer{}
-
-				//inline or remote go by path xxx/l/xxx
-				if strings.Contains(item.Key.String(), "/l/") {
-					fileCountInProgress++
-					mon.IntVal("FileCountInProgress").Observe(fileCountInProgress)
-				}
 
 				err = proto.Unmarshal(item.Value, pointer)
 				if err != nil {
@@ -161,8 +151,6 @@ func (checker *Checker) IdentifyInjuredSegments(ctx context.Context) (err error)
 			return nil
 		},
 	)
-	totalFilesCount = fileCountInProgress
-	mon.IntVal("totalFilesCount").Observe(totalFilesCount)
 	return err
 }
 
